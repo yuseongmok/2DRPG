@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 278f79daeed03bc48b5f3b1434f179c8
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 317832
+  packageName: Monochromatic Madness
+  packageVersion: 1.0.0
+  assetPath: Assets/Coder_Assets/Monochrome_Madness/art/animations/JumpParticles.anim
+  uploadId: 752630

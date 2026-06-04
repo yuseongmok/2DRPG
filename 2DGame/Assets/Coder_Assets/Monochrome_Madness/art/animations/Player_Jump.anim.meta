@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 116d727d3ac8ed8438e3a6c7e25cd8d9
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 317832
+  packageName: Monochromatic Madness
+  packageVersion: 1.0.0
+  assetPath: Assets/Coder_Assets/Monochrome_Madness/art/animations/Player_Jump.anim
+  uploadId: 752630

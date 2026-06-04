@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: c3014b2a206b11e40b012c9adf0e59d0
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 317832
+  packageName: Monochromatic Madness
+  packageVersion: 1.0.0
+  assetPath: Assets/Coder_Assets/Monochrome_Madness/art/animations/Player_Dash.anim
+  uploadId: 752630

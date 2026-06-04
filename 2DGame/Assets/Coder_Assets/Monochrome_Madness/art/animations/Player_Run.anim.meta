@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 8669068ba0ec1e749a8494e4e16a2e3e
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 317832
+  packageName: Monochromatic Madness
+  packageVersion: 1.0.0
+  assetPath: Assets/Coder_Assets/Monochrome_Madness/art/animations/Player_Run.anim
+  uploadId: 752630

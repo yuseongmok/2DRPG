@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d1832f152ec170245af1fa547ccd9570
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 9100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 317832
+  packageName: Monochromatic Madness
+  packageVersion: 1.0.0
+  assetPath: Assets/Coder_Assets/Monochrome_Madness/art/animations/Jump.controller
+  uploadId: 752630
