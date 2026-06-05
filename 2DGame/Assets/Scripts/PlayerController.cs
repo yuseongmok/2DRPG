@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 public class PlayerController : MonoBehaviour
@@ -11,126 +12,239 @@ public class PlayerController : MonoBehaviour
     public float checkRadius = 0.2f;
     public LayerMask whatIsGround;
 
-    [Header("공격 설정 (기본 공격)")]
+    [Header("공격 설정")]
     public Transform attackPoint;    
     public float attackRange = 0.5f; 
     public LayerMask enemyLayers;    
-    public int attackDamage = 10;     
-    public float attackRate = 2.5f;    // 초당 공격 횟수 (연사 속도 조절: 숫자가 클수록 꾹 눌렀을 때 더 빠르게 연사합니다)
     private float nextAttackTime = 0f;
+
+    [Header("대쉬 설정")]
+    public float dashSpeed = 40f;       
+    public float dashTime = 0.1f;        
+    public float dashCooldown = 0.5f;    
+    private bool canDash = true;         
+    private bool isDashing = false;      
+    public bool isInvincible = false;    
+    public GameObject dashEffectPrefab; 
+
+    [Header("무기 시스템 (루팅 및 스왑)")]
+    public WeaponData defaultWeapon;   // 게임 시작할 때 들고 있을 기본 무기 데이터
+    private WeaponData currentWeapon;  // 현재 들고 있는 무기 데이터 상자
+
+    [Header("스킬 시스템")]
+    private float nextSkillTime = 0f; // 다음 스킬 사용 가능 시간 타이머
+    private bool isUsingSkill = false; // 현재 스킬 시전 중인가?
 
     private Rigidbody2D rb;
     private Animator anim;
-    private Vector2 moveInput;
+    private Vector2 moveInput; 
     private bool isFacingRight = true;
     private bool isGrounded;
 
-    [Header("이펙트 설정")]
-    public GameObject attackEffectPrefab;
-
-    // --- 애니메이션 상태 관리를 위한 변수 ---
     private string currentAnimationState;
     private bool isAttacking = false;
+    private TrailRenderer trailRenderer; 
 
     private const string ANIM_IDLE = "Player_Idle";
     private const string ANIM_WALK = "Player_Run";
     private const string ANIM_JUMP = "Player_Jump";
-    private const string ANIM_ATTACK = "Player_Attack";
+    private const string ANIM_DASH = "Player_Dash"; 
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
+        trailRenderer = GetComponent<TrailRenderer>(); 
+        if (trailRenderer != null) trailRenderer.enabled = false;
+
+        if (defaultWeapon != null)
+        {
+            currentWeapon = defaultWeapon;
+            Debug.Log("기본 무기 장착 완료: " + currentWeapon.weaponName);
+        }
     }
 
     void Update()
     {
-        // --- 0. 실시간 공격 종료 감지 ---
-        if (isAttacking)
+        // 대시 즉시 캔슬 규칙
+        if (Input.GetKeyDown(KeyCode.LeftShift) && canDash)
+        {
+            isAttacking = false;
+            isUsingSkill = false; //스킬 캔슬
+            StartCoroutine(DashCoroutine());
+            return; 
+        }
+
+        if (isDashing) return;
+
+        // 0. 실시간 공격 종료 감지
+        if (isAttacking && currentWeapon != null)
         {
             AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(0);
-            // 공격 애니메이션이 90% 이상 진행되었을 때 공격 상태를 해제하여 다음 행동(혹은 연속 공격)이 가능하게 합니다.
-            if (stateInfo.IsName(ANIM_ATTACK) && stateInfo.normalizedTime >= 0.9f)
+            if (stateInfo.IsName(currentWeapon.attackAnimationStateName) && stateInfo.normalizedTime >= 0.9f)
             {
                 isAttacking = false; 
             }
         }
 
-        // 1. 이동 입력 (오직 좌우 화살표 키만 인식)
         moveInput.x = 0f;
         if (Input.GetKey(KeyCode.RightArrow)) moveInput.x = 1f;
         else if (Input.GetKey(KeyCode.LeftArrow)) moveInput.x = -1f;
-        
-        // 2. 방향 뒤집기 (공격 도중에는 고개 돌리기 금지하여 묵직함 유지)
-        if (!isAttacking)
+
+        // 방향 전환 제어 (공격 중이 아닐 때만 방향키에 따라 회전)
+        if (!isAttacking && !isUsingSkill)
         {
             if (moveInput.x > 0 && !isFacingRight) Flip();
             else if (moveInput.x < 0 && isFacingRight) Flip();
         }
 
+        if (Input.GetKey(KeyCode.LeftControl) || Input.GetMouseButton(0) || Input.GetKey(KeyCode.A)) 
+        {
+            if (!isAttacking && Time.time >= nextAttackTime) 
+            {
+               Attack();
+               
+               // 공격 속도에 따른 다음 공격 가능 시간 계산
+               if (currentWeapon != null)
+               {
+                   nextAttackTime = Time.time + 1f / currentWeapon.attackRate;
+               }
+            }
+        }
+        //S키로 무기의 고유 스킬 발동
+        if (Input.GetKeyDown(KeyCode.S) && currentWeapon != null)
+        {
+            if (!isUsingSkill && !isAttacking && Time.time >= nextSkillTime)
+            {
+                StartCoroutine(UseWeaponSkillCoroutine());
+            }
+        }
+
         // 3. 바닥 체크
         isGrounded = Physics2D.OverlapCircle(groundCheck.position, checkRadius, whatIsGround);
 
-        // 4. 점프 입력 (스페이스바)
-        if (Input.GetButtonDown("Jump") && isGrounded)
+        // 4. 점프 입력 처리 (공격 중에는 차단)
+        if (Input.GetButtonDown("Jump") && isGrounded && !isAttacking)
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
         }
 
-        // 쿨타임이 지났고, 현재 공격 판정이 끝난 타이밍이라면
-        if (Time.time >= nextAttackTime && !isAttacking)
-        {
-            // GetKeyDown 대신 GetKey를 사용하여 키를 '꾹 누르고 있는 상태'를 감지합니다.
-            if (Input.GetKey(KeyCode.A))
-            {
-                Attack();
-                // 다음 공격이 나갈 쿨타임 계산
-                nextAttackTime = Time.time + 1f / attackRate;
-            }
-        }
-
-        // 6. 실시간 애니메이션 상태 결정 연산
+        // 7. 실시간 애니메이션 상태 결정 연산
         UpdateAnimationState();
+
     }
 
     void FixedUpdate()
     {
-        rb.linearVelocity = new Vector2(moveInput.x * moveSpeed, rb.linearVelocity.y);
+        if (isDashing) return;
+
+        if ((isAttacking || isUsingSkill) && isGrounded)
+        {
+            rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
+        }
+        else
+        {
+
+            rb.linearVelocity = new Vector2(moveInput.x * moveSpeed, rb.linearVelocity.y);
+        }
+    }
+
+    public WeaponData SwapWeapon(WeaponData newWeapon)
+    {
+        if (newWeapon == null) return null;
+
+        WeaponData oldWeapon = currentWeapon; 
+        currentWeapon = newWeapon;            
+
+        SpriteRenderer sr = GetComponent<SpriteRenderer>();
+        if (sr != null && currentWeapon.weaponSprite != null)
+        {
+            sr.sprite = currentWeapon.weaponSprite;
+        }
+        
+        Debug.Log("★ 무기 교체 완료! 현재 무기: " + currentWeapon.weaponName);
+        return oldWeapon;                     
     }
 
     void Attack()
     {
         isAttacking = true;
-        
-        // 중요: 연속 공격 시 애니메이션이 굳지 않고 매번 첫 프레임부터 새로 나가도록 강제 리셋
         currentAnimationState = ""; 
-        ChangeAnimationState(ANIM_ATTACK); 
-
-        if (attackEffectPrefab != null && attackPoint != null)
-        {
-        // AttackPoint의 위치와 회전값 그대로 이펙트를 찍어냅니다.
-        GameObject effect = Instantiate(attackEffectPrefab, attackPoint.position, attackPoint.rotation);
         
-        // 캐릭터가 왼쪽을 보고 있다면 이펙트도 왼쪽을 보게 뒤집어줍니다.
-        Vector3 effectScale = effect.transform.localScale;
-           if (!isFacingRight)
-           {
-            effectScale.x *= -1;
+        ChangeAnimationState(currentWeapon.attackAnimationStateName); 
+
+        float finalRange = (currentWeapon != null) ? currentWeapon.attackRange : attackRange;
+
+        if (currentWeapon.attackEffectPrefab != null && attackPoint != null)
+        {
+            GameObject effect = Instantiate(currentWeapon.attackEffectPrefab, attackPoint.position, attackPoint.rotation);
+            Vector3 effectScale = effect.transform.localScale;
+            
+            effectScale.x = (isFacingRight ? Mathf.Abs(effectScale.x) : -Mathf.Abs(effectScale.x));
             effect.transform.localScale = effectScale;
-           }
         }
 
-
-        Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(attackPoint.position, attackRange, enemyLayers);
+        Vector2 attackPosition = new Vector2(attackPoint.position.x, attackPoint.position.y);
+        Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(attackPosition, finalRange, enemyLayers);
+        
         foreach (Collider2D enemy in hitEnemies)
         {
-            Debug.Log(enemy.name + "을(를) 공격했습니다! 대미지: " + attackDamage);
+            if (currentWeapon.hitEffectPrefab != null)
+            {
+                Vector2 hitPoint = enemy.ClosestPoint(attackPoint.position);
+                Instantiate(currentWeapon.hitEffectPrefab, hitPoint, Quaternion.identity);
+            }
+            Debug.Log(enemy.name + "에게 " + currentWeapon.weaponName + "(으)로 공격! 대미지: " + currentWeapon.attackDamage);
         }
+    }
+
+    IEnumerator DashCoroutine()
+    {
+        canDash = false;
+        isDashing = true;
+        isInvincible = true; 
+        isAttacking = false; 
+        isUsingSkill = false;
+
+        if (trailRenderer != null) trailRenderer.enabled = true;
+        float dashDirection = isFacingRight ? 1f : -1f;
+
+        if (dashEffectPrefab != null)
+        {
+            GameObject dashFX = Instantiate(dashEffectPrefab, transform.position, Quaternion.identity);
+            Vector3 fxScale = dashFX.transform.localScale;
+            if (!isFacingRight)
+            {
+                fxScale.x *= -1;
+                dashFX.transform.localScale = fxScale;
+            }
+        }
+
+        float originalGravity = rb.gravityScale;
+        rb.gravityScale = 0f;
+        rb.linearVelocity = new Vector2(dashDirection * dashSpeed, 0f);
+
+        ChangeAnimationState(ANIM_DASH);
+
+        yield return new WaitForSeconds(dashTime);
+
+        rb.gravityScale = originalGravity;
+        rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y); 
+        isDashing = false;
+        isInvincible = false; 
+
+        isAttacking = false;
+        isUsingSkill = false;
+
+        if (trailRenderer != null) trailRenderer.enabled = false;
+
+        yield return new WaitForSeconds(dashCooldown);
+        canDash = true;
     }
 
     void UpdateAnimationState()
     {
-        if (isAttacking) return;
+        if (isDashing || isAttacking || isUsingSkill) return;
 
         if (!isGrounded)
         {
@@ -145,6 +259,7 @@ public class PlayerController : MonoBehaviour
 
     void ChangeAnimationState(string newState)
     {
+        if (!anim.HasState(0, Animator.StringToHash(newState))) return;
         if (currentAnimationState == newState) return;
 
         anim.Play(newState, 0, 0f); 
@@ -154,9 +269,9 @@ public class PlayerController : MonoBehaviour
     void Flip()
     {
         isFacingRight = !isFacingRight;
-        Vector3 localScale = transform.localScale;
-        localScale.x *= -1;
-        transform.localScale = localScale;
+        Vector3 currentScale = transform.localScale;
+        currentScale.x *= -1;
+        transform.localScale = currentScale;
     }
 
     private void OnDrawGizmosSelected()
@@ -166,11 +281,54 @@ public class PlayerController : MonoBehaviour
             Gizmos.color = Color.red;
             Gizmos.DrawWireSphere(groundCheck.position, checkRadius);
         }
-
-        if (attackPoint != null)
+        if (attackPoint != null && currentWeapon != null)
         {
             Gizmos.color = Color.yellow;
-            Gizmos.DrawWireSphere(attackPoint.position, attackRange);
+            Gizmos.DrawWireSphere(attackPoint.position, currentWeapon.attackRange);
+
+            Gizmos.color = new Color(1f, 0.5f, 0f); // 주황색
+            Gizmos.DrawWireSphere(attackPoint.position, currentWeapon.skillRange);
         }
+    }
+
+    IEnumerator UseWeaponSkillCoroutine()
+    {
+        isUsingSkill = true;
+        currentAnimationState = ""; // 애니메이션 강제 리프레시
+
+        // 1. 스킬 애니메이션 재생
+        ChangeAnimationState(currentWeapon.skillAnimationName);
+
+        // 2. 쿨타임 세팅
+        nextSkillTime = Time.time + currentWeapon.skillCooldown;
+
+        // 3. 스킬 전용 대형 이펙트 생성 및 방향 조절
+        if (currentWeapon.skillEffectPrefab != null && attackPoint != null)
+        {
+            GameObject effect = Instantiate(currentWeapon.skillEffectPrefab, attackPoint.position, attackPoint.rotation);
+            Vector3 effectScale = effect.transform.localScale;
+            effectScale.x = (isFacingRight ? Mathf.Abs(effectScale.x) : -Mathf.Abs(effectScale.x));
+            effect.transform.localScale = effectScale;
+        }
+
+        // 4. 넓게 베기 링 연산
+        Vector2 attackPosition = new Vector2(attackPoint.position.x, attackPoint.position.y);
+        Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(attackPosition, currentWeapon.skillRange, enemyLayers);
+
+        foreach (Collider2D enemy in hitEnemies)
+        {
+            if (currentWeapon.hitEffectPrefab != null)
+            {
+                Vector2 hitPoint = enemy.ClosestPoint(attackPoint.position);
+                Instantiate(currentWeapon.hitEffectPrefab, hitPoint, Quaternion.identity);
+            }
+            Debug.Log($"💥 [스킬] {enemy.name}에게 [{currentWeapon.skillName}] 발동! 강력한 대미지: {currentWeapon.skillDamage}");
+        }
+
+        // 현재는 넉넉하게 0.4초 뒤에 움직임이 풀리도록 세팅했습니다. (원하는 시간으로 조절 가능)
+        yield return new WaitForSeconds(0.4f);
+
+        // 시간이 지나면 안전하게 스킬 상태를 해제하여 다시 움직일 수 있게 만듭니다!
+        isUsingSkill = false;
     }
 }
