@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f2baacf88dabf144b952705230cb93cc, type: 3}
+  m_Name: SwordData2
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponData
+  weaponName: "\uB300\uAC80"
+  attackDamage: 20
+  attackRate: 0.5
+  weaponSprite: {fileID: 21300000, guid: 414d65f37bd544f9693facbe34f0e7b3, type: 3}
+  attackRange: 3.5
+  weaponDescription: "[\uB808\uC5B4]"
+  attackAnimationStateName: Player_Bigsword
+  attackEffectPrefab: {fileID: 5503505460791601945, guid: d34720918d4840d44b173502d2394d0f, type: 3}
+  hitEffectPrefab: {fileID: 1758473627833946668, guid: 5b0dcd101677b004386da614fd6d6e63, type: 3}
+  skillName: "\uD654\uC5FC\uAC15\uD0C0"
+  skillCooldown: 5
+  skillIcon: {fileID: 21300000, guid: 04841b8a9cae96b42aa2a2689b689515, type: 3}
+  skillDamage: 25
+  skillRange: 1.2
+  skillAnimationName: Player_Bigsword
+  skillEffectPrefab: {fileID: 0}
+  projectilePrefab: {fileID: 148581184191089251, guid: 6d088f8dd7286814eb0c1622de116d0f, type: 3}
+  shakeDuration: 0.15
+  shakeMagnitude: 0.2

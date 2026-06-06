@@ -18,6 +18,11 @@ public class PlayerController : MonoBehaviour
     public LayerMask enemyLayers;    
     private float nextAttackTime = 0f;
 
+    [Header("플레이어 체력 설정")]
+    public int maxHealth = 100;
+    private int currentHealth;
+    private bool isHurt = false; // 피격 시 넉백 동안 조작을 막기 위한 플래그
+
     [Header("대쉬 설정")]
     public float dashSpeed = 40f;       
     public float dashTime = 0.1f;        
@@ -62,6 +67,18 @@ public class PlayerController : MonoBehaviour
             currentWeapon = defaultWeapon;
             Debug.Log("기본 무기 장착 완료: " + currentWeapon.weaponName);
         }
+
+        if (SkillUIController.Instance != null)
+        {
+            SkillUIController.Instance.UpdateSkillIcon(currentWeapon);
+        }
+
+        if (HPBarController.Instance != null)
+        {
+            HPBarController.Instance.SetupMaxHP(maxHealth);
+        }
+
+        currentHealth = maxHealth;
     }
 
     void Update()
@@ -69,6 +86,7 @@ public class PlayerController : MonoBehaviour
         // 대시 즉시 캔슬 규칙
         if (Input.GetKeyDown(KeyCode.LeftShift) && canDash)
         {
+            if (isHurt) return;
             isAttacking = false;
             isUsingSkill = false; //스킬 캔슬
             StartCoroutine(DashCoroutine());
@@ -136,6 +154,7 @@ public class PlayerController : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (isHurt) return;
         if (isDashing) return;
 
         if ((isAttacking || isUsingSkill) && isGrounded)
@@ -160,6 +179,11 @@ public class PlayerController : MonoBehaviour
         if (sr != null && currentWeapon.weaponSprite != null)
         {
             sr.sprite = currentWeapon.weaponSprite;
+        }
+
+        if (SkillUIController.Instance != null)
+        {
+            SkillUIController.Instance.UpdateSkillIcon(currentWeapon);
         }
         
         Debug.Log("★ 무기 교체 완료! 현재 무기: " + currentWeapon.weaponName);
@@ -189,11 +213,21 @@ public class PlayerController : MonoBehaviour
         
         foreach (Collider2D enemy in hitEnemies)
         {
+
             if (currentWeapon.hitEffectPrefab != null)
             {
                 Vector2 hitPoint = enemy.ClosestPoint(attackPoint.position);
                 Instantiate(currentWeapon.hitEffectPrefab, hitPoint, Quaternion.identity);
             }
+
+            Enemy enemyScript = enemy.GetComponent<Enemy>();
+            if (enemyScript != null)
+            {
+                // 🎯 평타 대미지(attackDamage)를 적에게 전달합니다!
+                enemyScript.TakeDamage(currentWeapon.attackDamage, transform.position); 
+            }
+
+
             Debug.Log(enemy.name + "에게 " + currentWeapon.weaponName + "(으)로 공격! 대미지: " + currentWeapon.attackDamage);
         }
     }
@@ -291,44 +325,187 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    public void TakeDamage(int damage, Vector2 attackerPosition)
+    {
+        // 1. 이미 무적 상태이거나 죽었다면 대미지 연산을 완전히 무시합니다.
+        if (isInvincible || currentHealth <= 0) return; 
+
+        currentHealth -= damage;
+        Debug.Log($"🩸 플레이어 피격! 남은 체력: {currentHealth}/{maxHealth}");
+
+        if (CameraShake.Instance != null) CameraShake.Instance.Shake(0.2f, 0.3f);
+
+        if (HPBarController.Instance != null)
+        {
+            HPBarController.Instance.UpdateHPBar(currentHealth);
+        }
+
+        // 사망 처리
+        if (currentHealth <= 0)
+        {
+            Die();
+            return; // 죽었다면 아래 무적 루틴을 탈 필요가 없으므로 종료
+        }
+
+        // 2. 넉백과 동시에 '무적 및 깜빡임 코루틴'을 실행합니다.
+        StartCoroutine(KnockbackCoroutine(attackerPosition));
+        StartCoroutine(BecomeInvincibleCoroutine(1.0f)); // 1.0초 동안 무적 시간 부여 (원하는 대로 조절 가능)
+    }
+
+    IEnumerator KnockbackCoroutine(Vector2 attackerPosition)
+    {
+        isHurt = true;
+        isAttacking = false;
+        isUsingSkill = false;
+
+        // 적이 있는 방향의 반대 방향 계산
+        float pushDirection = transform.position.x > attackerPosition.x ? 1f : -1f;
+        
+        // 순간적으로 위+뒤쪽으로 튕겨 나가게 힘을 줍니다 (수치는 원하는 대로 조절 가능)
+        rb.linearVelocity = new Vector2(pushDirection * 7f, 5f);
+
+        // 0.2초 동안 아파하며 조작 불가
+        yield return new WaitForSeconds(0.2f); 
+        
+        isHurt = false;
+    }
+
+    void Die()
+    {
+        Debug.Log("💀 플레이어 사망... 게임 오버!");
+        // TODO: 여기에 게임 오버 UI 띄우기 등의 연출을 추가하시면 됩니다.
+        gameObject.SetActive(false); 
+    }
+
+    IEnumerator BecomeInvincibleCoroutine(float duration)
+    {
+        isInvincible = true; // 무적 상태 ON
+
+        // 깜빡임 연출을 위해 플레이어의 SpriteRenderer를 가져옵니다.
+        SpriteRenderer sr = GetComponent<SpriteRenderer>();
+        Color originalColor = sr.color;
+        
+        // 반투명하게 반짝일 타겟 색상 (알파값 0.4 정도로 세팅)
+        Color flashColor = new Color(originalColor.r, originalColor.g, originalColor.b, 0.4f);
+
+        float elapsed = 0f;
+        float flashInterval = 0.1f; // 깜빡이는 속도 주기 (0.1초 마다 투명도 전환)
+
+        // 지정된 무적 시간 동안 무한 루프를 돌며 깜빡입니다.
+        while (elapsed < duration)
+        {
+            // 현재 색상이 원래 색상이면 반투명하게, 반투명하면 원래 색상으로 스왑
+            sr.color = (sr.color == originalColor) ? flashColor : originalColor;
+
+            yield return new WaitForSeconds(flashInterval);
+            elapsed += flashInterval;
+        }
+
+        // 무적 시간이 끝났으므로 색상을 완벽하게 원래대로 되돌리고 무적 해제
+        sr.color = originalColor;
+        isInvincible = false; // 무적 상태 OFF
+        Debug.Log("🛡️ 플레이어 무적 시간 종료!");
+    }
+
+
+
     IEnumerator UseWeaponSkillCoroutine()
     {
         isUsingSkill = true;
-        currentAnimationState = ""; // 애니메이션 강제 리프레시
+        currentAnimationState = ""; // 애니메이션 강제 리프레시를 위해 초기화
 
         // 1. 스킬 애니메이션 재생
         ChangeAnimationState(currentWeapon.skillAnimationName);
 
-        // 2. 쿨타임 세팅
+        // 2. 다음 스킬 사용 가능 시간 타이머 계산
         nextSkillTime = Time.time + currentWeapon.skillCooldown;
 
-        // 3. 스킬 전용 대형 이펙트 생성 및 방향 조절
-        if (currentWeapon.skillEffectPrefab != null && attackPoint != null)
+        // 3. UI 쿨타임 컴포넌트 호출 (아이콘 위 어두운 막 및 숫자 표기 시작)
+        if (SkillUIController.Instance != null)
         {
-            GameObject effect = Instantiate(currentWeapon.skillEffectPrefab, attackPoint.position, attackPoint.rotation);
-            Vector3 effectScale = effect.transform.localScale;
-            effectScale.x = (isFacingRight ? Mathf.Abs(effectScale.x) : -Mathf.Abs(effectScale.x));
-            effect.transform.localScale = effectScale;
+            SkillUIController.Instance.TriggerCooldown(currentWeapon.skillCooldown);
         }
 
-        // 4. 넓게 베기 링 연산
-        Vector2 attackPosition = new Vector2(attackPoint.position.x, attackPoint.position.y);
-        Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(attackPosition, currentWeapon.skillRange, enemyLayers);
-
-        foreach (Collider2D enemy in hitEnemies)
+        // =================================================================
+        // [원거리 스킬 분기] 무기 데이터에 투사체 프리팹이 등록되어 있는 경우
+        // =================================================================
+        if (currentWeapon.projectilePrefab != null)
         {
-            if (currentWeapon.hitEffectPrefab != null)
+            if (attackPoint != null)
             {
-                Vector2 hitPoint = enemy.ClosestPoint(attackPoint.position);
-                Instantiate(currentWeapon.hitEffectPrefab, hitPoint, Quaternion.identity);
+                // 1) 투사체 오브젝트 동적 생성
+                GameObject projGO = Instantiate(currentWeapon.projectilePrefab, attackPoint.position, Quaternion.identity);
+                Projectile proj = projGO.GetComponent<Projectile>();
+
+                if (proj != null)
+                {
+                    // 2) 플레이어가 바라보는 2D 방향 축 계산
+                    Vector2 shootDir = isFacingRight ? Vector2.right : Vector2.left;
+                    
+                    // 3) 투사체 스크립트에 속도(15f), 대미지, 타겟 레이어, 타격 이펙트 데이터 주입
+                    proj.Setup(shootDir, 15f, currentWeapon.skillDamage, enemyLayers, currentWeapon.hitEffectPrefab);
+                    
+                    // 4) 발사 반동 연출을 위한 카메라 진동 발생
+                    if (CameraShake.Instance != null)
+                    {
+                        CameraShake.Instance.Shake(currentWeapon.shakeDuration, currentWeapon.shakeMagnitude);
+                    }
+                }
             }
-            Debug.Log($"💥 [스킬] {enemy.name}에게 [{currentWeapon.skillName}] 발동! 강력한 대미지: {currentWeapon.skillDamage}");
+        }
+        // =================================================================
+        // [근접 스킬 분기] 투사체가 없을 경우 (기존 광역 베기 모드)
+        // =================================================================
+        else
+        {
+            // 1) 스킬 전용 대형 근접 검기/이펙트 생성 및 방향 조절
+            if (currentWeapon.skillEffectPrefab != null && attackPoint != null)
+            {
+                GameObject effect = Instantiate(currentWeapon.skillEffectPrefab, attackPoint.position, attackPoint.rotation);
+                Vector3 effectScale = effect.transform.localScale;
+                
+                // 캐릭터가 바라보는 방향에 맞춰 이펙트 $X$축 좌우 반전 제어
+                effectScale.x = (isFacingRight ? Mathf.Abs(effectScale.x) : -Mathf.Abs(effectScale.x));
+                effect.transform.localScale = effectScale;
+            }
+
+            // 2) 스킬 시전 순간 묵직한 타격감을 위한 카메라 진동 발생
+            if (CameraShake.Instance != null)
+            {
+                CameraShake.Instance.Shake(currentWeapon.shakeDuration, currentWeapon.shakeMagnitude);
+            }
+
+            // 3) OverlapCircle을 활용한 무기 고유 스킬 범위(skillRange) 내의 광역 타격 연산
+            Vector2 attackPosition = new Vector2(attackPoint.position.x, attackPoint.position.y);
+            Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(
+                
+           attackPosition, currentWeapon.skillRange, enemyLayers);
+
+            foreach (Collider2D enemy in hitEnemies)
+            {
+                // 적 피격 위치에 피격(Hit) 이펙트 생성
+                if (currentWeapon.hitEffectPrefab != null)
+                {
+                    Vector2 hitPoint = enemy.ClosestPoint(attackPoint.position);
+                    Instantiate(currentWeapon.hitEffectPrefab, hitPoint, Quaternion.identity);
+                }
+
+                Enemy enemyScript = enemy.GetComponent<Enemy>();
+                if (enemyScript != null)
+                {
+                    // 🎯 스킬 대미지(skillDamage)를 적에게 전달합니다!
+                    enemyScript.TakeDamage(currentWeapon.skillDamage, transform.position);
+                }
+                
+                // 콘솔 로그 출력 (대미지 연산 확인용)
+                Debug.Log($"💥 [스킬] {enemy.name}에게 [{currentWeapon.skillName}] 발동! 강력한 대미지: {currentWeapon.skillDamage}");
+            }
         }
 
-        // 현재는 넉넉하게 0.4초 뒤에 움직임이 풀리도록 세팅했습니다. (원하는 시간으로 조절 가능)
+        // 4. 스킬 시전 후 액션이 고정되는 채널링 시간 (기존 0.4초 유지)
         yield return new WaitForSeconds(0.4f);
 
-        // 시간이 지나면 안전하게 스킬 상태를 해제하여 다시 움직일 수 있게 만듭니다!
+        // 5. 안전하게 스킬 플래그를 꺼서 이동 제한 및 애니메이션 덮어쓰기 제한 해제
         isUsingSkill = false;
     }
 }

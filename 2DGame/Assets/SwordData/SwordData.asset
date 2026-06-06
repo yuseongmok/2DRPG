@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f2baacf88dabf144b952705230cb93cc, type: 3}
+  m_Name: SwordData
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponData
+  weaponName: "\uB0A1\uC740\uAC80"
+  attackDamage: 10
+  attackRate: 2.5
+  weaponSprite: {fileID: 21300000, guid: 9a5db01688f3f433dbbb7914b72a9571, type: 3}
+  attackRange: 2
+  weaponDescription: "[\uC77C\uBC18]"
+  attackAnimationStateName: Player_Skill
+  attackEffectPrefab: {fileID: 5503505460791601945, guid: 74c549d1b06b6b140a1fd9536eea637f, type: 3}
+  hitEffectPrefab: {fileID: 1758473627833946668, guid: 5b0dcd101677b004386da614fd6d6e63, type: 3}
+  skillName: "\uD6A1\uBCA0\uAE30"
+  skillCooldown: 4
+  skillIcon: {fileID: 21300000, guid: 156b1649b67a4ea49b2f88d0c37fd463, type: 3}
+  skillDamage: 25
+  skillRange: 5
+  skillAnimationName: Player_Skill
+  skillEffectPrefab: {fileID: 5503505460791601945, guid: cf5e205fe25359542ba61404441a57e7, type: 3}
