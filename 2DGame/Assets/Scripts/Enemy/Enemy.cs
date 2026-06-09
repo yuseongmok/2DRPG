@@ -15,10 +15,13 @@ public class Enemy : MonoBehaviour
     private bool isChasing = false;      
 
     [Header("적 공격 설정")]
-    public int attackDamage = 20;        // 톳통일된 단일 공격 대미지
+    public int attackDamage = 20;        // 통일된 단일 공격 대미지
     public float attackCooldown = 1.5f;  // 공격 후 다음 공격까지의 쿨타임
-    public float damageDelay = 0.35f;    // ★ 애니메이션 시작 후 데미지가 들어갈 때까지의 시간 (여기서 타이밍 조절!)
+    public float damageDelay = 0.35f;    // ★ 애니메이션 시작 후 데미지가 들어갈 때까지의 시간
     private float nextAttackTime = 0f;
+
+    [Header("적 고유 사운드 설정")]
+    public string attackSoundName = "EnemyAttack"; // 사운드매니저에 등록할 이 적의 공격음 이름
 
     [Header("피격 효과 프리팹 (선택)")]
     public GameObject deathEffectPrefab;
@@ -33,7 +36,7 @@ public class Enemy : MonoBehaviour
     private const string ANIM_RUN = "Enemy_Run";
     private const string ANIM_HIT = "Enemy_Hit";
     private const string ANIM_DIE = "Enemy_Die";
-    private const string ANIM_ATTACK = "Enemy_Attack1"; // 가져오신 3개 중 가장 맘에 드는 모션 이름으로 맞추세요!
+    private const string ANIM_ATTACK = "Enemy_Attack1"; 
 
     private Rigidbody2D rb;
     private Animator anim; 
@@ -111,7 +114,7 @@ public class Enemy : MonoBehaviour
     }
 
     // =================================================================
-    // ★ [수정] 단발성 깔끔한 공격 루틴
+    // ★ 단발성 깔끔한 공격 루틴 (사운드 연동 추가)
     // =================================================================
     System.Collections.IEnumerator AttackCoroutine()
     {
@@ -121,6 +124,13 @@ public class Enemy : MonoBehaviour
 
         currentAnimationState = ""; 
         ChangeAnimationState(ANIM_ATTACK);
+
+        // ★ [적 공격 휘두르는 효과음 재생]
+        // 모션이 시작되자마자 칼바람 소리가 나도록 코루틴 최상단에 배치했습니다.
+        if (SoundManager.Instance != null && !string.IsNullOrEmpty(attackSoundName))
+        {
+            SoundManager.Instance.PlaySFX(attackSoundName);
+        }
 
         // ⏳ 인스펙터창의 damageDelay에 설정한 시간만큼 기다린 후 대미지를 줍니다.
         yield return new WaitForSeconds(damageDelay); 
@@ -143,18 +153,15 @@ public class Enemy : MonoBehaviour
         // -------------------------------------------------------------
         if (attackEffectPrefab != null)
         {
-            // attackPoint를 지정하지 않았다면 적의 중심(transform.position)에서 생성합니다.
             Vector3 spawnPos = attackPoint != null ? attackPoint.position : transform.position;
             Quaternion spawnRot = attackPoint != null ? attackPoint.rotation : Quaternion.identity;
 
             GameObject effect = Instantiate(attackEffectPrefab, spawnPos, spawnRot);
             
-            // 적이 왼쪽/오른쪽 바라보는 것에 맞춰 이펙트도 좌우 반전 시켜줍니다.
             Vector3 effectScale = effect.transform.localScale;
-            // 적의 원래 기본 방향(isFacingRight의 세팅)에 맞춰 X축 스케일을 부호 제어합니다.
             if (isFacingRight)
             {
-                effectScale.x = -Mathf.Abs(effectScale.x); // 오른쪽에 있을 때 뒤집기 (기본 스프라이트 기준에 맞춰 조절 가능)
+                effectScale.x = -Mathf.Abs(effectScale.x); 
             }
             else
             {
@@ -164,7 +171,7 @@ public class Enemy : MonoBehaviour
         }
 
         // -------------------------------------------------------------
-        // 2. 실제 플레이어 타격 판정 (기존 로직 유지)
+        // 2. 실제 플레이어 타격 판정 
         // -------------------------------------------------------------
         float distanceToPlayer = Vector2.Distance(transform.position, playerTransform.position);
         
@@ -210,7 +217,6 @@ public class Enemy : MonoBehaviour
         currentHealth -= damage;
         Debug.Log($"{enemyName}이(가) {damage}의 대미지를 입음! 남은 체력: {currentHealth}");
 
-        // 공격 도중 대미지를 받으면 공격을 캔슬하고 피격 상태로 전환
         if (isAttacking)
         {
             StopAllCoroutines();
@@ -265,7 +271,6 @@ public class Enemy : MonoBehaviour
         Destroy(gameObject, 1.5f);
     }
 
-    // 몸빵(접촉 대미지) 로직 유지
     private void OnCollisionEnter2D(Collision2D collision)
     {
         if (isDead) return;
@@ -277,7 +282,7 @@ public class Enemy : MonoBehaviour
             {
                 if (player.isInvincible) return;
 
-                int bumpDamage = Mathf.RoundToInt(attackDamage * 0.5f); // 몸빵은 원래 공격력의 절반
+                int bumpDamage = Mathf.RoundToInt(attackDamage * 0.5f); 
                 player.TakeDamage(bumpDamage, transform.position);
                 Debug.Log($"💥 {enemyName}의 몸빵에 부딪힘! 대미지: {bumpDamage}");
             }

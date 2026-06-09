@@ -23,6 +23,12 @@ public class BossEnemy : MonoBehaviour
     public GameObject magicEffectPrefab; 
     public float magicDamageRadius = 1.8f; // 마법 폭발이 대미지를 줄 반경 크기
 
+    [Header("보스 고유 사운드 이름 설정")]
+    public string bossBgmName = "BossBGM";            // 보스전 시작 시 재생할 배경음 이름
+    public string closeAttackSoundName = "BossAttack"; //  근접 공격 시 터질 효과음 이름
+    public string magicCastSoundName = "BossCast";     // 마법 기 모을 때(캐스팅) 터질 효과음 이름
+    public string magicExplodeSoundName = "BossExplode"; // 마법이 실제로 쾅! 터질 때 효과음 이름
+
     [Header("컴포넌트 및 레이어")]
     public Transform player;
     public LayerMask playerLayer;
@@ -31,6 +37,7 @@ public class BossEnemy : MonoBehaviour
     private SpriteRenderer sr;
     private bool isFacingRight = false;
     private bool isHandlingPattern = false;
+    private bool isBgmStarted = false; // BGM이 중복으로 다시 켜지는 것을 방지하는 플래그
 
     [Header("트랜스폼 설정")]
     public Transform visualChild;
@@ -40,6 +47,10 @@ public class BossEnemy : MonoBehaviour
     private const string ANIM_ATTACK = "Attack";
     private const string ANIM_CAST = "Cast";
     private const string ANIM_DEATH = "Death";
+
+    [Header("보스 보상 설정")]
+    public GameObject portalPrefab;
+    public Transform portalSpawnPoint;
 
     void Start()
     {
@@ -55,8 +66,16 @@ public class BossEnemy : MonoBehaviour
             GameObject pGO = GameObject.FindGameObjectWithTag("Player");
             if (pGO != null) player = pGO.transform;
         }
+    }
 
-        StartCoroutine(BossAIBackgroundLoop());
+    private void OnEnable()
+    {
+        if (rb != null)
+        {
+            StopAllCoroutines(); 
+            isBgmStarted = false; // 활성화될 때 BGM 플래그 리셋
+            StartCoroutine(BossAIBackgroundLoop());
+        }
     }
 
     IEnumerator BossAIBackgroundLoop()
@@ -73,12 +92,20 @@ public class BossEnemy : MonoBehaviour
 
             float distanceToPlayer = Vector2.Distance(transform.position, player.position);
 
-            //플레이어가 추적 제한 범위를 완전히 벗어났을 때 
+            // 플레이어가 추적 제한 범위를 완전히 벗어났을 때 (보스가 전투를 포기하고 돌아감)
             if (distanceToPlayer > chaseRange)
             {
                 if (BossHPController.Instance != null)
                 {
-                    BossHPController.Instance.HideBossHP(); // 안전하게 계속 끄기
+                    BossHPController.Instance.HideBossHP(); 
+                }
+
+                // ★ [보스 전용 BGM을 끄거나 필드 BGM으로 전환하고 싶을 때]
+                // 다시 플레이어가 오기 전까지 보스 음악을 중단시킵니다.
+                if (isBgmStarted)
+                {
+                    if (SoundManager.Instance != null) SoundManager.Instance.StopBGM();
+                    isBgmStarted = false;
                 }
 
                 currentState = BossState.Idle;
@@ -96,34 +123,34 @@ public class BossEnemy : MonoBehaviour
                 yield return null;
                 continue;
             }
-
             else
             {
                 if (BossHPController.Instance != null)
                 {
                     BossHPController.Instance.ShowBossHP(bossName, currentHealth, maxHealth);
                 }
+
+                // ★ [보스전 BGM 재생 부하 분산] 플레이어가 범위 안에 들어오는 즉시 BGM 연출 시작!
+                if (!isBgmStarted && SoundManager.Instance != null && !string.IsNullOrEmpty(bossBgmName))
+                {
+                    SoundManager.Instance.PlayBGM(bossBgmName, 0.6f); // 0.6 볼륨으로 웅장하게 재생
+                    isBgmStarted = true;
+                }
             }
 
-            // 플레이어가 추적 범위 안에 들어와 있을 때의 행동 정의
-            // 패턴과 패턴 사이에 잠시 플레이어를 쳐다보며 숨을 고르는 시간
             currentState = BossState.Idle;
             rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
             anim.Play(ANIM_IDLE);
             LookAtTarget(player.position);
 
-            yield return new WaitForSeconds(Random.Range(1.0f, 1.5f)); // 공격 멈춤 딜레이 (지나치게 쉴 새 없이 공격하는 것 방지)
+            yield return new WaitForSeconds(Random.Range(1.0f, 1.5f)); 
 
-            // 무작위로 패턴 고르기 (50% 확률로 근접 추적 공격 또는 원거리 마법 폭발)
             float randomPattern = Random.Range(0f, 100f);
 
             if (randomPattern < 50f)
             {
-                //근접 공격 패턴 선택
-                // 플레이어가 평타 사거리보다 멀리 있다면 Walk 애니메이션으로 끝까지 쫓아간 뒤 공격합니다.
                 while (Vector2.Distance(transform.position, player.position) > attackRange)
                 {
-                    // 만약 쫓아가다가 플레이어가 추적 범위를 탈출하면 추적 취소
                     if (Vector2.Distance(transform.position, player.position) > chaseRange) break;
 
                     currentState = BossState.Chase;
@@ -134,7 +161,6 @@ public class BossEnemy : MonoBehaviour
                     yield return null;
                 }
 
-                // 사거리 안에 도달했다면 쾅!
                 if (Vector2.Distance(transform.position, player.position) <= attackRange)
                 {
                     rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
@@ -143,8 +169,6 @@ public class BossEnemy : MonoBehaviour
             }
             else
             {
-                //마법 폭발 패턴 선택
-                //플레이어가 가까이 있든 멀리 있든 상관없이 제자리에서 즉시 주문을 외워 타격합니다!
                 rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
                 yield return StartCoroutine(Pattern_TargetMagic());
             }
@@ -160,6 +184,12 @@ public class BossEnemy : MonoBehaviour
 
         LookAtTarget(player.position);
         anim.Play(ANIM_ATTACK);
+
+        // ★ [근접 공격 효과음 재생] 모션을 크게 취하며 휘두르는 사운드 출력
+        if (SoundManager.Instance != null && !string.IsNullOrEmpty(closeAttackSoundName))
+        {
+            SoundManager.Instance.PlaySFX(closeAttackSoundName);
+        }
 
         yield return new WaitForSeconds(0.4f);
 
@@ -180,15 +210,18 @@ public class BossEnemy : MonoBehaviour
         isHandlingPattern = true;
         LookAtTarget(player.position);
 
-        // 1. Cast 애니메이션 재생 (보스가 마법을 준비하는 하나의 긴 모션으로 처리)
         currentState = BossState.Cast;
-        anim.Play(ANIM_IDLE); // 상태를 확실히 리셋하기 위해 넣어주거나, 바로 아래 Cast 재생
+        anim.Play(ANIM_IDLE); 
         anim.Play(ANIM_CAST);
 
-        // 보스가 기를 모으는 선딜레이 시간
+        // ★ [마법 캐스팅/기 모으기 효과음 재생] 보스가 하단에서 마법진을 생성하는 충전음 출력
+        if (SoundManager.Instance != null && !string.IsNullOrEmpty(magicCastSoundName))
+        {
+            SoundManager.Instance.PlaySFX(magicCastSoundName);
+        }
+
         yield return new WaitForSeconds(0.5f);
 
-        // 2. 캐스팅이 끝나자마자 플레이어의 현재 위치를 조준하고 이펙트 생성!
         Vector3 targetPosition = player.position;
 
         if (magicEffectPrefab != null)
@@ -196,10 +229,15 @@ public class BossEnemy : MonoBehaviour
             Instantiate(magicEffectPrefab, targetPosition, Quaternion.identity);
         }
 
-        // 3. 이펙트 생성 후 '쾅!' 터지기 전까지 플레이어가 피할 수 있는 유예 시간 (0.5초)
+        // 이펙트 생성 후 '쾅!' 터지기 전까지 플레이어가 피할 수 있는 유예 시간 (1.0초)
         yield return new WaitForSeconds(1.0f);
 
-        // 4. 폭발 타이밍에 범위 내 플레이어 타격 판정
+        // ★ [마법 폭발 효과음 재생] 유예 시간이 지나고 바닥이 폭발하는 타이밍에 콰쾅!
+        if (SoundManager.Instance != null && !string.IsNullOrEmpty(magicExplodeSoundName))
+        {
+            SoundManager.Instance.PlaySFX(magicExplodeSoundName);
+        }
+
         Collider2D hitPlayer = Physics2D.OverlapCircle(targetPosition, magicDamageRadius, playerLayer);
         if (hitPlayer != null)
         {
@@ -210,10 +248,7 @@ public class BossEnemy : MonoBehaviour
             }
         }
 
-
-        // 5. 마법 시전이 완전히 끝나고 다시 움직이기 전까지의 후딜레이
         yield return new WaitForSeconds(0.5f);
-
         isHandlingPattern = false;
     }
 
@@ -235,23 +270,31 @@ public class BossEnemy : MonoBehaviour
         }
     }
 
-
     void Die()
     {
         currentState = BossState.Death;
-        StopAllCoroutines(); // 기존 패턴 루프 코루틴 모두 정지
+        StopAllCoroutines(); 
 
         rb.linearVelocity = Vector2.zero;
 
-        // 죽음 애니메이션 재생
-        anim.Play(ANIM_DEATH);
-        Debug.Log($"🎉 보스 [{bossName}] 처치 완료!! 잠시 후 오브젝트가 삭제됩니다.");
+        // ★ [보스가 죽었으므로 배경음 정지] 
+        if (SoundManager.Instance != null)
+        {
+            SoundManager.Instance.StopBGM();
+        }
 
-        // 보스 체력 UI 숨기기
+        anim.Play(ANIM_DEATH);
+        Debug.Log($"🎉 보스 [{bossName}] 처치 완료");
+
         if (BossHPController.Instance != null) BossHPController.Instance.HideBossHP();
 
-        Destroy(gameObject, 1.0f);
+        if (portalPrefab != null)
+        {
+            Vector3 spawnPosition = portalSpawnPoint != null ? portalSpawnPoint.position : transform.position;
+            Instantiate(portalPrefab, spawnPosition, Quaternion.identity);
+        }
 
+        Destroy(gameObject, 1.0f);
         this.enabled = false;
     }
 
@@ -267,14 +310,12 @@ public class BossEnemy : MonoBehaviour
 
         if (visualChild != null)
         {
-            // 부모(전체 오브젝트)는 가만히 두고, 이미지가 그려진 자식의 X 스케일만 뒤집습니다.
             Vector3 scale = visualChild.localScale;
             scale.x *= -1;
             visualChild.localScale = scale;
         }
         else
         {
-            // 만약 자식을 안 구비해뒀다면 기존 방식으로 예외 처리
             Vector3 scale = transform.localScale;
             scale.x *= -1;
             transform.localScale = scale;

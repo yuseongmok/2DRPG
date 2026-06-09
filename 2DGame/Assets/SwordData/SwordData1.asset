@@ -28,3 +28,8 @@ MonoBehaviour:
   skillRange: 5
   skillAnimationName: Player_Skill
   skillEffectPrefab: {fileID: 7647375919561907788, guid: 89fa21217df035a42b9f2d13163ddf67, type: 3}
+  projectilePrefab: {fileID: 0}
+  shakeDuration: 0.15
+  shakeMagnitude: 20
+  attackSoundName: DubleAttack
+  skillSoundName: Skill2

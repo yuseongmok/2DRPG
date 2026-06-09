@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement; // ★ 씬 전환 네임스페이스 추가
 
 public class PlayerController : MonoBehaviour
 {
@@ -22,15 +23,25 @@ public class PlayerController : MonoBehaviour
     public int maxHealth = 100;
     private int currentHealth;
     private bool isHurt = false; // 피격 시 넉백 동안 조작을 막기 위한 플래그
+    private bool isDead = false;  // 중복 사망 판정을 방지하기 위한 플래그
 
     [Header("대쉬 설정")]
     public float dashSpeed = 40f;       
-    public float dashTime = 0.1f;        
+    public float dashTime = 0.1f;       
     public float dashCooldown = 0.5f;    
     private bool canDash = true;         
     private bool isDashing = false;      
     public bool isInvincible = false;    
     public GameObject dashEffectPrefab; 
+
+    [Header("플레이어 공통 사운드 이름")]
+    public string jumpSoundName = "PlayerJump";   // 유니티 사운드매니저에 등록할 점프음 이름
+    public string dashSoundName = "PlayerDash";   // 유니티 사운드매니저에 등록할 대시음 이름
+    public string hurtSoundName = "PlayerHurt";   // 유니티 사운드매니저에 등록할 피격음 이름
+    public string dieSoundName = "PlayerDie";     // 유니티 사운드매니저에 등록할 사망음 이름
+
+    [Header("씬 전환 설정")]
+    public string lobbySceneName = "LobbyScene";  // 빌드 세팅에 등록된 로비 씬 이름 (에디터에서 수정 가능)
 
     [Header("무기 시스템 (루팅 및 스왑)")]
     public WeaponData defaultWeapon;   // 게임 시작할 때 들고 있을 기본 무기 데이터
@@ -54,6 +65,7 @@ public class PlayerController : MonoBehaviour
     private const string ANIM_WALK = "Player_Run";
     private const string ANIM_JUMP = "Player_Jump";
     private const string ANIM_DASH = "Player_Dash"; 
+    private const string ANIM_DIE = "Player_Die";
 
     void Start()
     {
@@ -79,10 +91,14 @@ public class PlayerController : MonoBehaviour
         }
 
         currentHealth = maxHealth;
+        isDead = false;
     }
 
     void Update()
     {
+        // 사망 상태일 경우 모든 키 입력 및 업데이트 루틴 완전 차단
+        if (isDead) return;
+
         // 대시 즉시 캔슬 규칙
         if (Input.GetKeyDown(KeyCode.LeftShift) && canDash)
         {
@@ -145,15 +161,21 @@ public class PlayerController : MonoBehaviour
         if (Input.GetButtonDown("Jump") && isGrounded && !isAttacking)
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            
+            // 점프 효과음 재생
+            if (SoundManager.Instance != null && !string.IsNullOrEmpty(jumpSoundName))
+            {
+                SoundManager.Instance.PlaySFX(jumpSoundName);
+            }
         }
 
         // 7. 실시간 애니메이션 상태 결정 연산
         UpdateAnimationState();
-
     }
 
     void FixedUpdate()
     {
+        if (isDead) return; // 사망 시 물리 연산 정지
         if (isHurt) return;
         if (isDashing) return;
 
@@ -163,14 +185,13 @@ public class PlayerController : MonoBehaviour
         }
         else
         {
-
             rb.linearVelocity = new Vector2(moveInput.x * moveSpeed, rb.linearVelocity.y);
         }
     }
 
     public WeaponData SwapWeapon(WeaponData newWeapon)
     {
-        if (newWeapon == null) return null;
+        if (newWeapon == null || isDead) return null;
 
         WeaponData oldWeapon = currentWeapon; 
         currentWeapon = newWeapon;            
@@ -197,6 +218,12 @@ public class PlayerController : MonoBehaviour
         
         ChangeAnimationState(currentWeapon.attackAnimationStateName); 
 
+        // [무기 고유 일반 공격 효과음 재생]
+        if (SoundManager.Instance != null && currentWeapon != null && !string.IsNullOrEmpty(currentWeapon.attackSoundName))
+        {
+            SoundManager.Instance.PlaySFX(currentWeapon.attackSoundName);
+        }
+
         float finalRange = (currentWeapon != null) ? currentWeapon.attackRange : attackRange;
 
         if (currentWeapon.attackEffectPrefab != null && attackPoint != null)
@@ -213,7 +240,6 @@ public class PlayerController : MonoBehaviour
         
         foreach (Collider2D enemy in hitEnemies)
         {
-
             if (currentWeapon.hitEffectPrefab != null)
             {
                 Vector2 hitPoint = enemy.ClosestPoint(attackPoint.position);
@@ -223,7 +249,6 @@ public class PlayerController : MonoBehaviour
             Enemy enemyScript = enemy.GetComponent<Enemy>();
             if (enemyScript != null)
             {
-                // 🎯 평타 대미지(attackDamage)를 적에게 전달합니다!
                 enemyScript.TakeDamage(currentWeapon.attackDamage, transform.position); 
             }
 
@@ -242,9 +267,8 @@ public class PlayerController : MonoBehaviour
             TreasureChest chest = enemy.GetComponent<TreasureChest>();
             if (chest != null)
             {
-                chest.OpenChest(); // 상자 전용 열기 함수 호출!
+                chest.OpenChest(); 
             }
-
 
             Debug.Log(enemy.name + "에게 " + currentWeapon.weaponName + "(으)로 공격! 대미지: " + currentWeapon.attackDamage);
         }
@@ -257,10 +281,16 @@ public class PlayerController : MonoBehaviour
         isInvincible = true;
         isAttacking = false;
         isUsingSkill = false;
-        moveInput = Vector2.zero; // 대시 중 이동 입력 방해 차단
+        moveInput = Vector2.zero; 
 
         if (trailRenderer != null) trailRenderer.enabled = true;
         float dashDirection = isFacingRight ? 1f : -1f;
+
+        // [대시 효과음 재생]
+        if (SoundManager.Instance != null && !string.IsNullOrEmpty(dashSoundName))
+        {
+            SoundManager.Instance.PlaySFX(dashSoundName);
+        }
 
         if (dashEffectPrefab != null)
         {
@@ -277,14 +307,12 @@ public class PlayerController : MonoBehaviour
         rb.gravityScale = 0f;
         rb.linearVelocity = new Vector2(dashDirection * dashSpeed, 0f);
 
-
-        int originalLayer = gameObject.layer; // 원래 레이어(Player)를 기억
-        gameObject.layer = LayerMask.NameToLayer("Dash"); // 대시 레이어로 전환 (적만 통과 가능)
+        int originalLayer = gameObject.layer; 
+        gameObject.layer = LayerMask.NameToLayer("Dash"); 
 
         ChangeAnimationState(ANIM_DASH);
 
         yield return new WaitForSeconds(dashTime);
-
 
         gameObject.layer = originalLayer;
 
@@ -304,7 +332,7 @@ public class PlayerController : MonoBehaviour
 
     void UpdateAnimationState()
     {
-        if (isDashing || isAttacking || isUsingSkill) return;
+        if (isDead || isDashing || isAttacking || isUsingSkill) return;
 
         if (!isGrounded)
         {
@@ -334,48 +362,34 @@ public class PlayerController : MonoBehaviour
         transform.localScale = currentScale;
     }
 
-    private void OnDrawGizmosSelected()
-    {
-        if (groundCheck != null)
-        {
-            Gizmos.color = Color.red;
-            Gizmos.DrawWireSphere(groundCheck.position, checkRadius);
-        }
-        if (attackPoint != null && currentWeapon != null)
-        {
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawWireSphere(attackPoint.position, currentWeapon.attackRange);
-
-            Gizmos.color = new Color(1f, 0.5f, 0f); // 주황색
-            Gizmos.DrawWireSphere(attackPoint.position, currentWeapon.skillRange);
-        }
-    }
-
     public void TakeDamage(int damage, Vector2 attackerPosition)
     {
-        // 1. 이미 무적 상태이거나 죽었다면 대미지 연산을 완전히 무시합니다.
-        if (isInvincible || currentHealth <= 0) return; 
+        if (isInvincible || currentHealth <= 0 || isDead) return; 
 
         currentHealth -= damage;
         Debug.Log($"🩸 플레이어 피격! 남은 체력: {currentHealth}/{maxHealth}");
 
-        if (CameraShake.Instance != null) CameraShake.Instance.Shake(0.2f, 0.3f);
+        // [플레이어 피격 사운드 재생]
+        if (SoundManager.Instance != null && !string.IsNullOrEmpty(hurtSoundName))
+        {
+            SoundManager.Instance.PlaySFX(hurtSoundName);
+        }
+
+        if (CameraShake.Instance != null) CameraShake.Instance.Shake(0.2f, 10.0f);
 
         if (HPBarController.Instance != null)
         {
             HPBarController.Instance.UpdateHPBar(currentHealth);
         }
 
-        // 사망 처리
         if (currentHealth <= 0)
         {
             Die();
-            return; // 죽었다면 아래 무적 루틴을 탈 필요가 없으므로 종료
+            return; 
         }
 
-        // 2. 넉백과 동시에 '무적 및 깜빡임 코루틴'을 실행합니다.
         StartCoroutine(KnockbackCoroutine(attackerPosition));
-        StartCoroutine(BecomeInvincibleCoroutine(1.0f)); // 1.0초 동안 무적 시간 부여 (원하는 대로 조절 가능)
+        StartCoroutine(BecomeInvincibleCoroutine(1.0f)); 
     }
 
     IEnumerator KnockbackCoroutine(Vector2 attackerPosition)
@@ -384,94 +398,115 @@ public class PlayerController : MonoBehaviour
         isAttacking = false;
         isUsingSkill = false;
 
-        // 적이 있는 방향의 반대 방향 계산
         float pushDirection = transform.position.x > attackerPosition.x ? 1f : -1f;
-        
-        // 순간적으로 위+뒤쪽으로 튕겨 나가게 힘을 줍니다 (수치는 원하는 대로 조절 가능)
         rb.linearVelocity = new Vector2(pushDirection * 7f, 5f);
 
-        // 0.2초 동안 아파하며 조작 불가
         yield return new WaitForSeconds(0.2f); 
         
         isHurt = false;
     }
 
+    // =================================================================
+    // ★ [개조된 사망 처리 루틴]
+    // =================================================================
     void Die()
     {
-        Debug.Log("💀 플레이어 사망... 게임 오버!");
-        // TODO: 여기에 게임 오버 UI 띄우기 등의 연출을 추가하시면 됩니다.
-        gameObject.SetActive(false); 
+        if (isDead) return;
+        isDead = true;
+
+        // 모든 활성화된 행동 제어 코루틴 강제 셧다운
+        StopAllCoroutines(); 
+        
+        Debug.Log("💀 플레이어 사망... 로비 전환 시퀀스 시작!");
+        StartCoroutine(DieSequenceCoroutine());
+    }
+
+    IEnumerator DieSequenceCoroutine()
+    {
+        // 1. 물리 제어권을 뺏고 멈춥니다.
+        rb.linearVelocity = Vector2.zero;
+        rb.gravityScale = 0f; 
+        GetComponent<Collider2D>().enabled = false; // 몬스터들에게 추가 유령 타격당하는 것 방지
+
+        // 2. 만약 사운드매니저가 배경음(보스나 필드 BGM)을 틀고 있었다면 조용히 정지시킵니다.
+        if (SoundManager.Instance != null)
+        {
+            SoundManager.Instance.StopBGM();
+            
+            // 3. 플레이어 사망 효과음(절명하는 소리 등)을 재생합니다.
+            if (!string.IsNullOrEmpty(dieSoundName))
+            {
+                SoundManager.Instance.PlaySFX(dieSoundName);
+            }
+        }
+
+        // 4. 사망 애니메이션 상태 재생 (HasState 체크로 애니메이션이 없어도 에러가 나지 않습니다)
+        ChangeAnimationState(ANIM_DIE);
+
+        // 5. 웅장하게 쓰러져 있는 모습을 잠시 보여주기 위해 2초간 대기합니다. (원하는 만큼 수정 가능)
+        yield return new WaitForSeconds(2.0f);
+
+        // 6. 대기 시간이 끝나면 지정한 로비 씬으로 안전하게 전환합니다!
+        SceneManager.LoadScene(lobbySceneName);
     }
 
     IEnumerator BecomeInvincibleCoroutine(float duration)
     {
-        isInvincible = true; // 무적 상태 ON
+        isInvincible = true; 
 
-        // 깜빡임 연출을 위해 플레이어의 SpriteRenderer를 가져옵니다.
         SpriteRenderer sr = GetComponent<SpriteRenderer>();
         Color originalColor = sr.color;
-        
-        // 반투명하게 반짝일 타겟 색상 (알파값 0.4 정도로 세팅)
         Color flashColor = new Color(originalColor.r, originalColor.g, originalColor.b, 0.4f);
 
         float elapsed = 0f;
-        float flashInterval = 0.1f; // 깜빡이는 속도 주기 (0.1초 마다 투명도 전환)
+        float flashInterval = 0.1f; 
 
-        // 지정된 무적 시간 동안 무한 루프를 돌며 깜빡입니다.
         while (elapsed < duration)
         {
-            // 현재 색상이 원래 색상이면 반투명하게, 반투명하면 원래 색상으로 스왑
             sr.color = (sr.color == originalColor) ? flashColor : originalColor;
 
             yield return new WaitForSeconds(flashInterval);
             elapsed += flashInterval;
         }
 
-        // 무적 시간이 끝났으므로 색상을 완벽하게 원래대로 되돌리고 무적 해제
         sr.color = originalColor;
-        isInvincible = false; // 무적 상태 OFF
+        isInvincible = false; 
         Debug.Log("🛡️ 플레이어 무적 시간 종료!");
     }
-
-
 
     IEnumerator UseWeaponSkillCoroutine()
     {
         isUsingSkill = true;
-        currentAnimationState = ""; // 애니메이션 강제 리프레시를 위해 초기화
+        currentAnimationState = ""; 
 
-        // 1. 스킬 애니메이션 재생
         ChangeAnimationState(currentWeapon.skillAnimationName);
 
-        // 2. 다음 스킬 사용 가능 시간 타이머 계산
+        // [무기 고유 스킬 사운드 재생]
+        if (SoundManager.Instance != null && currentWeapon != null && !string.IsNullOrEmpty(currentWeapon.skillSoundName))
+        {
+            SoundManager.Instance.PlaySFX(currentWeapon.skillSoundName);
+        }
+
         nextSkillTime = Time.time + currentWeapon.skillCooldown;
 
-        // 3. UI 쿨타임 컴포넌트 호출 (아이콘 위 어두운 막 및 숫자 표기 시작)
         if (SkillUIController.Instance != null)
         {
             SkillUIController.Instance.TriggerCooldown(currentWeapon.skillCooldown);
         }
 
-        // =================================================================
-        // [원거리 스킬 분기] 무기 데이터에 투사체 프리팹이 등록되어 있는 경우
-        // =================================================================
+        // [원거리 스킬 분기]
         if (currentWeapon.projectilePrefab != null)
         {
             if (attackPoint != null)
             {
-                // 1) 투사체 오브젝트 동적 생성
                 GameObject projGO = Instantiate(currentWeapon.projectilePrefab, attackPoint.position, Quaternion.identity);
                 Projectile proj = projGO.GetComponent<Projectile>();
 
                 if (proj != null)
                 {
-                    // 2) 플레이어가 바라보는 2D 방향 축 계산
                     Vector2 shootDir = isFacingRight ? Vector2.right : Vector2.left;
-                    
-                    // 3) 투사체 스크립트에 속도(15f), 대미지, 타겟 레이어, 타격 이펙트 데이터 주입
                     proj.Setup(shootDir, 15f, currentWeapon.skillDamage, enemyLayers, currentWeapon.hitEffectPrefab);
                     
-                    // 4) 발사 반동 연출을 위한 카메라 진동 발생
                     if (CameraShake.Instance != null)
                     {
                         CameraShake.Instance.Shake(currentWeapon.shakeDuration, currentWeapon.shakeMagnitude);
@@ -479,37 +514,28 @@ public class PlayerController : MonoBehaviour
                 }
             }
         }
-        // =================================================================
-        // [근접 스킬 분기] 투사체가 없을 경우 (기존 광역 베기 모드)
-        // =================================================================
+        // [근접 스킬 분기]
         else
         {
-            // 1) 스킬 전용 대형 근접 검기/이펙트 생성 및 방향 조절
             if (currentWeapon.skillEffectPrefab != null && attackPoint != null)
             {
                 GameObject effect = Instantiate(currentWeapon.skillEffectPrefab, attackPoint.position, attackPoint.rotation);
                 Vector3 effectScale = effect.transform.localScale;
                 
-                // 캐릭터가 바라보는 방향에 맞춰 이펙트 $X$축 좌우 반전 제어
                 effectScale.x = (isFacingRight ? Mathf.Abs(effectScale.x) : -Mathf.Abs(effectScale.x));
                 effect.transform.localScale = effectScale;
             }
 
-            // 2) 스킬 시전 순간 묵직한 타격감을 위한 카메라 진동 발생
             if (CameraShake.Instance != null)
             {
                 CameraShake.Instance.Shake(currentWeapon.shakeDuration, currentWeapon.shakeMagnitude);
             }
 
-            // 3) OverlapCircle을 활용한 무기 고유 스킬 범위(skillRange) 내의 광역 타격 연산
             Vector2 attackPosition = new Vector2(attackPoint.position.x, attackPoint.position.y);
-            Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(
-                
-           attackPosition, currentWeapon.skillRange, enemyLayers);
+            Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(attackPosition, currentWeapon.skillRange, enemyLayers);
 
             foreach (Collider2D enemy in hitEnemies)
             {
-                // 적 피격 위치에 피격(Hit) 이펙트 생성
                 if (currentWeapon.hitEffectPrefab != null)
                 {
                     Vector2 hitPoint = enemy.ClosestPoint(attackPoint.position);
@@ -519,19 +545,14 @@ public class PlayerController : MonoBehaviour
                 Enemy enemyScript = enemy.GetComponent<Enemy>();
                 if (enemyScript != null)
                 {
-                    // 🎯 스킬 대미지(skillDamage)를 적에게 전달합니다!
                     enemyScript.TakeDamage(currentWeapon.skillDamage, transform.position);
                 }
                 
-                // 콘솔 로그 출력 (대미지 연산 확인용)
                 Debug.Log($"💥 [스킬] {enemy.name}에게 [{currentWeapon.skillName}] 발동! 강력한 대미지: {currentWeapon.skillDamage}");
             }
         }
 
-        // 4. 스킬 시전 후 액션이 고정되는 채널링 시간 (기존 0.4초 유지)
         yield return new WaitForSeconds(0.4f);
-
-        // 5. 안전하게 스킬 플래그를 꺼서 이동 제한 및 애니메이션 덮어쓰기 제한 해제
         isUsingSkill = false;
     }
 }

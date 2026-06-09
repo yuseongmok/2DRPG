@@ -1,11 +1,14 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 public class JumpPad : MonoBehaviour
 {
-    [Header("Á¡ÇÁ´ë ¼³Á¤")]
-    public float launchForce = 15f; // Æ¨°Ü ³ª°¥ ÈûÀÇ ¼¼±â (¼öÄ¡¸¦ Á¶ÀıÇÏ¸ç Å×½ºÆ®ÇØ º¸¼¼¿ä)
+    [Header("ì í”„ëŒ€ ì„¤ì •")]
+    public float launchForce = 15f; // íŠ•ê²¨ ë‚˜ê°ˆ í˜ì˜ ì„¸ê¸°
 
-    // ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ÀÖ´Ù¸é ¿¬°á
+    [Header("ì í”„ëŒ€ ì‚¬ìš´ë“œ ì„¤ì •")]
+    public string launchSoundName = "JumpPadLaunch"; // â˜… ì‚¬ìš´ë“œë§¤ë‹ˆì €ì— ë“±ë¡í•  ì í”„ëŒ€ ì‘ë™ìŒ ì´ë¦„
+
+    // ì• ë‹ˆë©”ì´ì…˜ì´ ìˆë‹¤ë©´ ì—°ê²°
     private Animator animator;
 
     void Start()
@@ -13,30 +16,36 @@ public class JumpPad : MonoBehaviour
         animator = GetComponent<Animator>();
     }
 
-    //2D ¹°Ã¼°¡ ÀÌ ¿ÀºêÁ§Æ®ÀÇ Æ®¸®°Å Ãæµ¹Ã¼¿¡ µé¾î¿ÔÀ» ¶§ ¹ßµ¿
+    // 2D ë¬¼ì²´ê°€ ì´ ì˜¤ë¸Œì íŠ¸ì˜ íŠ¸ë¦¬ê±° ì¶©ëŒì²´ì— ë“¤ì–´ì™”ì„ ë•Œ ë°œë™
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        // ¹âÀº ´ë»óÀÌ 'ÇÃ·¹ÀÌ¾î'ÀÎÁö È®ÀÎÇÕ´Ï´Ù.
+        // ë°Ÿì€ ëŒ€ìƒì´ 'í”Œë ˆì´ì–´'ì¸ì§€ í™•ì¸í•©ë‹ˆë‹¤.
         if (collision.CompareTag("Player"))
         {
             Rigidbody2D playerRb = collision.GetComponent<Rigidbody2D>();
 
             if (playerRb != null)
             {
-                // 1. ÇÃ·¹ÀÌ¾îÀÇ ±âÁ¸ ÇÏ°­/»ó½Â ¼Óµµ¸¦ ±ò²ûÇÏ°Ô ÃÊ±âÈ­ÇÕ´Ï´Ù.
-                // (±âÁ¸ ¼Óµµ¸¦ ÃÊ±âÈ­ ¾È ÇÏ¸é, ³ôÀº °÷¿¡¼­ ¶³¾îÁö¸ç ¹âÀ» ¶§ ³ôÀÌ ¾È Æ§´Ï´Ù!)
+                // 1. í”Œë ˆì´ì–´ì˜ ê¸°ì¡´ í•˜ê°•/ìƒìŠ¹ ì†ë„ë¥¼ ê¹”ë”í•˜ê²Œ ì´ˆê¸°í™”í•©ë‹ˆë‹¤.
                 playerRb.linearVelocity = new Vector2(playerRb.linearVelocity.x, 0f);
 
-                // 2. À§ÂÊ(Vector2.up) ¹æÇâÀ¸·Î ¼³Á¤ÇÑ ÈûÀ» ¼ø°£ÀûÀ¸·Î °¡ÇÕ´Ï´Ù.
+                // 2. ìœ„ìª½(Vector2.up) ë°©í–¥ìœ¼ë¡œ ì„¤ì •í•œ í˜ì„ ìˆœê°„ì ìœ¼ë¡œ ê°€í•©ë‹ˆë‹¤.
                 playerRb.AddForce(Vector2.up * launchForce, ForceMode2D.Impulse);
 
-                // 3. (¼±ÅÃ) Á¡ÇÁ´ë ÀÛµ¿ ¾Ö´Ï¸ŞÀÌ¼Ç Æ®¸®°Å ÀÛµ¿
+                // â˜… [ì í”„ëŒ€ ì‘ë™ íš¨ê³¼ìŒ ì¬ìƒ]
+                // í”Œë ˆì´ì–´ê°€ íŠ•ê²¨ ë‚˜ê°€ëŠ” ìˆœê°„ì— ì‚¬ìš´ë“œë§¤ë‹ˆì €ë¥¼ í†µí•´ íš¨ê³¼ìŒì„ ì¶œë ¥í•©ë‹ˆë‹¤.
+                if (SoundManager.Instance != null && !string.IsNullOrEmpty(launchSoundName))
+                {
+                    SoundManager.Instance.PlaySFX(launchSoundName);
+                }
+
+                // 3. (ì„ íƒ) ì í”„ëŒ€ ì‘ë™ ì• ë‹ˆë©”ì´ì…˜ íŠ¸ë¦¬ê±° ì‘ë™
                 if (animator != null)
                 {
                     animator.SetTrigger("Launch");
                 }
 
-                Debug.Log(" ÇÃ·¹ÀÌ¾î°¡ Á¡ÇÁ´ë¸¦ ¹â¾Æ ³ôÀÌ Æ¨°Ü ³ª°©´Ï´Ù!");
+                Debug.Log("ğŸš€ í”Œë ˆì´ì–´ê°€ ì í”„ëŒ€ë¥¼ ë°Ÿì•„ ë†’ì´ íŠ•ê²¨ ë‚˜ê°‘ë‹ˆë‹¤!");
             }
         }
     }

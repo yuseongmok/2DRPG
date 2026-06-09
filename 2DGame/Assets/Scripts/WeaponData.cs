@@ -34,4 +34,8 @@ public class WeaponData : ScriptableObject
     [Header("스킬 진동 설정")]
     public float shakeDuration = 0.15f; // 진동이 지속될 시간 (초)
     public float shakeMagnitude = 0.2f; // 진동 세기 (기본 강도 0.1 ~ 0.3 추천)
+
+    [Header("무기 고유 사운드 설정")]
+    public string attackSoundName = "DefaultAttack"; // 이 무기의 일반 공격 사운드 이름
+    public string skillSoundName = "DefaultSkill";   // 이 무기의 고유 스킬 사운드 이름
 }

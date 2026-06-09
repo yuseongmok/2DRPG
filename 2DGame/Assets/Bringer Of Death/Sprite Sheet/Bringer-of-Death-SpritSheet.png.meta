@@ -326,11 +326,11 @@ TextureImporter:
       rect:
         serializedVersion: 2
         x: 0
-        y: 651
+        y: 650
         width: 140
         height: 93
-      alignment: 9
-      pivot: {x: 0.7623355, y: 0.3802792}
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       customData: 
       outline: []
@@ -348,7 +348,7 @@ TextureImporter:
       rect:
         serializedVersion: 2
         x: 140
-        y: 651
+        y: 650
         width: 140
         height: 93
       alignment: 0
@@ -744,7 +744,7 @@ TextureImporter:
       rect:
         serializedVersion: 2
         x: 420
-        y: 465
+        y: 466
         width: 140
         height: 93
       alignment: 0
@@ -1741,7 +1741,11 @@ TextureImporter:
     weights: []
     secondaryTextures: []
     spriteCustomMetadata:
-      entries: []
+      entries:
+      - key: SpriteEditor.SliceOnImport
+        value: False
+      - key: SpriteEditor.SliceSettings
+        value: '{"sliceOnImport":false,"gridCellCount":{"x":1.0,"y":1.0},"gridSpriteSize":{"x":64.0,"y":64.0},"gridSpriteOffset":{"x":0.0,"y":0.0},"gridSpritePadding":{"x":0.0,"y":0.0},"pivot":{"x":0.5,"y":0.5},"pivotPixels":{"x":0.0,"y":0.0},"autoSlicingMethod":0,"spriteAlignment":0,"pivotUnitMode":0,"slicingType":0,"keepEmptyRects":false,"isAlternate":false}'
     nameFileIdTable:
       Bringer-of-Death-SpritSheet_0: -750047184722822154
       Bringer-of-Death-SpritSheet_1: 8445469178646879675

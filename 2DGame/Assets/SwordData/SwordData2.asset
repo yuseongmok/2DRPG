@@ -30,4 +30,4 @@ MonoBehaviour:
   skillEffectPrefab: {fileID: 0}
   projectilePrefab: {fileID: 148581184191089251, guid: 6d088f8dd7286814eb0c1622de116d0f, type: 3}
   shakeDuration: 0.15
-  shakeMagnitude: 0.2
+  shakeMagnitude: 20
