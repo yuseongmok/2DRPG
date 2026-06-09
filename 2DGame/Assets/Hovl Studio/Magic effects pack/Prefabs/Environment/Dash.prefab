@@ -14775,6 +14775,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f4fd1f7179d365740b73c0c52c7b4b47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DestroyEffect
+  delayTime: 0.5
 --- !u!198 &5911206648629905745
 ParticleSystem:
   m_ObjectHideFlags: 0

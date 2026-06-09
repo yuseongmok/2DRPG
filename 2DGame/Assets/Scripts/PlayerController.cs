@@ -227,6 +227,12 @@ public class PlayerController : MonoBehaviour
                 enemyScript.TakeDamage(currentWeapon.attackDamage, transform.position); 
             }
 
+            BossEnemy bossScript = enemy.GetComponent<BossEnemy>();
+            if (bossScript != null)
+            {
+                bossScript.TakeDamage(currentWeapon.attackDamage, transform.position);
+            }
+
             DestructibleObject destObj = enemy.GetComponent<DestructibleObject>();
             if (destObj != null)
             {
