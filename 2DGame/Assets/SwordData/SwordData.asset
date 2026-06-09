@@ -28,3 +28,6 @@ MonoBehaviour:
   skillRange: 5
   skillAnimationName: Player_Skill
   skillEffectPrefab: {fileID: 5503505460791601945, guid: cf5e205fe25359542ba61404441a57e7, type: 3}
+  projectilePrefab: {fileID: 0}
+  shakeDuration: 0.1
+  shakeMagnitude: 0.1

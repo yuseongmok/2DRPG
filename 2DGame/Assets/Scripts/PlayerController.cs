@@ -227,6 +227,18 @@ public class PlayerController : MonoBehaviour
                 enemyScript.TakeDamage(currentWeapon.attackDamage, transform.position); 
             }
 
+            DestructibleObject destObj = enemy.GetComponent<DestructibleObject>();
+            if (destObj != null)
+            {
+                destObj.TakeDamage(currentWeapon.attackDamage);
+            }
+
+            TreasureChest chest = enemy.GetComponent<TreasureChest>();
+            if (chest != null)
+            {
+                chest.OpenChest(); // 상자 전용 열기 함수 호출!
+            }
+
 
             Debug.Log(enemy.name + "에게 " + currentWeapon.weaponName + "(으)로 공격! 대미지: " + currentWeapon.attackDamage);
         }
@@ -236,9 +248,10 @@ public class PlayerController : MonoBehaviour
     {
         canDash = false;
         isDashing = true;
-        isInvincible = true; 
-        isAttacking = false; 
+        isInvincible = true;
+        isAttacking = false;
         isUsingSkill = false;
+        moveInput = Vector2.zero; // 대시 중 이동 입력 방해 차단
 
         if (trailRenderer != null) trailRenderer.enabled = true;
         float dashDirection = isFacingRight ? 1f : -1f;
@@ -258,14 +271,21 @@ public class PlayerController : MonoBehaviour
         rb.gravityScale = 0f;
         rb.linearVelocity = new Vector2(dashDirection * dashSpeed, 0f);
 
+
+        int originalLayer = gameObject.layer; // 원래 레이어(Player)를 기억
+        gameObject.layer = LayerMask.NameToLayer("Dash"); // 대시 레이어로 전환 (적만 통과 가능)
+
         ChangeAnimationState(ANIM_DASH);
 
         yield return new WaitForSeconds(dashTime);
 
+
+        gameObject.layer = originalLayer;
+
         rb.gravityScale = originalGravity;
-        rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y); 
+        rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
         isDashing = false;
-        isInvincible = false; 
+        isInvincible = false;
 
         isAttacking = false;
         isUsingSkill = false;

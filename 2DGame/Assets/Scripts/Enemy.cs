@@ -268,13 +268,15 @@ public class Enemy : MonoBehaviour
     // 몸빵(접촉 대미지) 로직 유지
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (isDead) return; 
+        if (isDead) return;
 
         if (collision.gameObject.CompareTag("Player"))
         {
             PlayerController player = collision.gameObject.GetComponent<PlayerController>();
             if (player != null)
             {
+                if (player.isInvincible) return;
+
                 int bumpDamage = Mathf.RoundToInt(attackDamage * 0.5f); // 몸빵은 원래 공격력의 절반
                 player.TakeDamage(bumpDamage, transform.position);
                 Debug.Log($"💥 {enemyName}의 몸빵에 부딪힘! 대미지: {bumpDamage}");
